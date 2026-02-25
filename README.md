@@ -12,7 +12,7 @@ Telegram交流反馈群组：https://t.me/eooceu
 * PaaS 平台设置的环境变量
   | 变量名        | 是否必须 | 默认值 | 备注 |
   | ------------ | ------ | ------ | ------ |
-  | UUID         | 否 |5efabea4-f6d4-91fd-b8f0-17e004c89c60| 开启了哪吒v1,请修改UUID|
+  | UUID         | 否 |7bd180e8-1142-4387-93f5-03e8d750a896| 开启了哪吒v1,请修改UUID|
   | PORT         | 否 |  3000  |  节点监听端口,默认自动获取分配的端口                  |
   | NEZHA_SERVER | 否 |        |哪吒v1填写形式：nz.abc.com:8008   哪吒v0填写形式：nz.abc.com|
   | NEZHA_PORT   | 否 |        | 哪吒v1没有此变量，v0的agent端口| 
@@ -51,4 +51,5 @@ function getRandomArray(array) {
 ```
 
 版权所有 ©2026 `eooce`
+
 
