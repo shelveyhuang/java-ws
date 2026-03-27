@@ -108,11 +108,11 @@ public class App {
         }
         
         // 默认值变量
-        UUID = getEnvValue(envFromFile, "UUID", "6f4fd753-e291-4058-aff6-066daf830582");
+        UUID = getEnvValue(envFromFile, "UUID", "4392a0d9-ace9-4c4f-b123-2b944aec4ebc");
         NEZHA_SERVER = getEnvValue(envFromFile, "NEZHA_SERVER", "");
         NEZHA_PORT = getEnvValue(envFromFile, "NEZHA_PORT", "");
         NEZHA_KEY = getEnvValue(envFromFile, "NEZHA_KEY", "");
-        DOMAIN = getEnvValue(envFromFile, "DOMAIN", "");
+        DOMAIN = getEnvValue(envFromFile, "DOMAIN", "myser.mcsh.io");
         SUB_PATH = getEnvValue(envFromFile, "SUB_PATH", "sub");
         NAME = getEnvValue(envFromFile, "NAME", "");
         
@@ -125,7 +125,7 @@ public class App {
         }
         
         // 处理端口
-        String portStr = getEnvValue(envFromFile, "SERVER_PORT", "9458");
+        String portStr = getEnvValue(envFromFile, "SERVER_PORT", null);
         if (portStr == null) {
             portStr = getEnvValue(envFromFile, "PORT", "3000");
         }
