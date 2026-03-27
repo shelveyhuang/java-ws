@@ -33,7 +33,7 @@ import io.github.cdimascio.dotenv.Dotenv;
 
 public class App {
     
-    // 优先从.env文件获取，没有则使用系统环境变量
+    // 配置变量
     private static String UUID;
     private static String NEZHA_SERVER;
     private static String NEZHA_PORT;
@@ -69,8 +69,6 @@ public class App {
     private static final long DNS_CACHE_TTL = 300000;
     
     private static Process nezhaProcess = null;
-    
-    // 日志级别控制
     private static boolean SILENT_MODE = true; 
     
     private static void log(String level, String msg) {
@@ -91,17 +89,10 @@ public class App {
         try {
             Path envPath = Paths.get(".env");
             if (Files.exists(envPath)) {
-                Dotenv dotenv = Dotenv.configure()
-                        .directory(".")
-                        .filename(".env")
-                        .ignoreIfMissing()
-                        .load();
-                
+                Dotenv dotenv = Dotenv.configure().directory(".").filename(".env").ignoreIfMissing().load();
                 dotenv.entries().forEach(entry -> envFromFile.put(entry.getKey(), entry.getValue()));
             }
-        } catch (Exception e) {
-            debug("Failed to load .env file: " + e.getMessage());
-        }
+        } catch (Exception e) { debug("Failed to load .env: " + e.getMessage()); }
         
         UUID = getEnvValue(envFromFile, "UUID", "4392a0d9-ace9-4c4f-b123-2b944aec4ebc");
         NEZHA_SERVER = getEnvValue(envFromFile, "NEZHA_SERVER", "");
@@ -114,10 +105,7 @@ public class App {
         String wspathFromEnv = getEnvValue(envFromFile, "WSPATH", null);
         WSPATH = (wspathFromEnv != null) ? wspathFromEnv : UUID.substring(0, 8);
         
-        String portStr = getEnvValue(envFromFile, "SERVER_PORT", null);
-        if (portStr == null) {
-            portStr = getEnvValue(envFromFile, "PORT", "3000");
-        }
+        String portStr = getEnvValue(envFromFile, "SERVER_PORT", getEnvValue(envFromFile, "PORT", "3000"));
         PORT = Integer.parseInt(portStr);
         
         AUTO_ACCESS = Boolean.parseBoolean(getEnvValue(envFromFile, "AUTO_ACCESS", "false"));
@@ -126,7 +114,6 @@ public class App {
         PROTOCOL_UUID = UUID.replace("-", "");
         UUID_BYTES = hexStringToByteArray(PROTOCOL_UUID);
         currentDomain = DOMAIN;
-        
         SILENT_MODE = !DEBUG;
     }
     
@@ -172,60 +159,40 @@ public class App {
                 dnsCache.put(host, ip);
                 dnsCacheTime.put(host, System.currentTimeMillis());
                 return ip;
-            } catch (Exception ex) {
-                error("DNS resolution failed for: " + host);
-                return host;
-            }
+            } catch (Exception ex) { return host; }
         }
     }
     
     private static void getIp() {
         if (DOMAIN == null || DOMAIN.isEmpty() || DOMAIN.equals("your-domain.com")) {
             try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create("https://api-ipv4.ip.sb/ip"))
-                        .timeout(Duration.ofSeconds(5))
-                        .build();
+                HttpRequest request = HttpRequest.newBuilder().uri(URI.create("https://api-ipv4.ip.sb/ip")).timeout(Duration.ofSeconds(5)).build();
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() == 200) {
                     currentDomain = response.body().trim();
-                    tls = "none";
-                    currentPort = PORT;
+                    tls = "none"; currentPort = PORT;
                     info("public IP: " + currentDomain);
                 }
-            } catch (Exception e) {
-                error("Failed to get IP: " + e.getMessage());
-                currentDomain = "127.0.0.1";
-                tls = "tls";
-                currentPort = 443;
-            }
+            } catch (Exception e) { currentDomain = "127.0.0.1"; tls = "tls"; currentPort = 443; }
         } else {
-            currentDomain = DOMAIN;
-            tls = "tls";
-            currentPort = 443;
+            currentDomain = DOMAIN; tls = "tls"; currentPort = 443;
         }
     }
     
     private static void getIsp() {
         try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.ip.sb/geoip"))
-                    .header("User-Agent", "Mozilla/5.0")
-                    .timeout(Duration.ofSeconds(3))
-                    .build();
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create("https://api.ip.sb/geoip")).header("User-Agent", "Mozilla/5.0").timeout(Duration.ofSeconds(3)).build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 String body = response.body();
                 isp = extractJsonValue(body, "country_code") + "-" + extractJsonValue(body, "isp");
                 isp = isp.replace(" ", "_");
-                return;
             }
         } catch (Exception e) {}
     }
     
     private static String extractJsonValue(String json, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]*)\"";
-        var matcher = java.util.regex.Pattern.compile(pattern).matcher(json);
+        var matcher = java.util.regex.Pattern.compile("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
         return matcher.find() ? matcher.group(1) : "";
     }
     
@@ -233,7 +200,6 @@ public class App {
         if (NEZHA_SERVER.isEmpty() || NEZHA_KEY.isEmpty()) return;
         downloadNpm();
         String command = buildNezhaCommand();
-        if (command.isEmpty()) return;
         try {
             ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", command);
             pb.redirectErrorStream(true);
@@ -252,7 +218,6 @@ public class App {
             if (response.statusCode() == 200) {
                 Files.write(Paths.get("npm"), response.body());
                 Runtime.getRuntime().exec("chmod 755 npm");
-                info("✅ nz downloaded successfully");
             }
         } catch (Exception e) { error("Download failed: " + e.getMessage()); }
     }
@@ -262,8 +227,7 @@ public class App {
             String tlsOpt = TLS_PORTS.contains(NEZHA_PORT) ? "--tls" : "";
             return String.format("nohup ./npm -s %s:%s -p %s %s --report-delay 4 --skip-conn --skip-procs >/dev/null 2>&1 &", NEZHA_SERVER, NEZHA_PORT, NEZHA_KEY, tlsOpt);
         } else {
-            String port = NEZHA_SERVER.contains(":") ? NEZHA_SERVER.substring(NEZHA_SERVER.lastIndexOf(':') + 1) : "";
-            String config = String.format("client_secret: %s\nserver: %s\ntls: %b\nuuid: %s\nreport_delay: 4\nskip_conn_count: true\n", NEZHA_KEY, NEZHA_SERVER, TLS_PORTS.contains(port), UUID);
+            String config = String.format("client_secret: %s\nserver: %s\ntls: %b\nuuid: %s\n", NEZHA_KEY, NEZHA_SERVER, false, UUID);
             try { Files.writeString(Paths.get("config.yaml"), config); } catch (IOException e) {}
             return "nohup ./npm -c config.yaml >/dev/null 2>&1 &";
         }
@@ -279,7 +243,11 @@ public class App {
         if (!AUTO_ACCESS || DOMAIN.isEmpty()) return;
         String fullUrl = "https://" + DOMAIN + "/" + SUB_PATH;
         try {
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create("https://oooo.serv00.net/add-url")).header("Content-Type", "application/json").post(HttpRequest.BodyPublishers.ofString("{\"url\":\"" + fullUrl + "\"}")).build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://oooo.serv00.net/add-url"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"url\":\"" + fullUrl + "\"}")) // 修复：全大写 POST
+                    .build();
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {}
     }
@@ -293,37 +261,23 @@ public class App {
         return Base64.getEncoder().encodeToString((vlessUrl + "\n" + trojanUrl + "\n" + ssUrl).getBytes(StandardCharsets.UTF_8));
     }
     
-    // --- 新增：自访问保活任务 ---
+    // 自访问保活
     private static void startSelfPingTask() {
         new Timer().schedule(new TimerTask() {
             @Override
             public void run() {
                 if (currentDomain == null || currentDomain.isEmpty() || "127.0.0.1".equals(currentDomain)) return;
-                
-                // 构造保活 URL (访问自己的 /sub 路径)
                 String protocol = "tls".equals(tls) ? "https://" : "http://";
                 String url = protocol + currentDomain + ":" + PORT + "/" + SUB_PATH;
-                
                 try {
-                    info("[Keep-Alive] 执行自访问保活任务...");
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(URI.create(url))
-                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KeepAlive/1.0")
-                            .timeout(Duration.ofSeconds(10))
-                            .GET()
-                            .build();
-                    
-                    httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                            .thenAccept(res -> {
-                                if (res.statusCode() == 200) {
-                                    info("[Keep-Alive] 响应成功 (200 OK)，休眠已重置。");
-                                }
-                            });
-                } catch (Exception e) {
-                    debug("[Keep-Alive] 自访问失败: " + e.getMessage());
-                }
+                    info("[Keep-Alive] 执行自访问保活: " + url);
+                    HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10)).GET().build();
+                    httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenAccept(res -> {
+                        if (res.statusCode() == 200) info("[Keep-Alive] 成功 (200 OK)");
+                    });
+                } catch (Exception e) {}
             }
-        }, 60000, 180000); // 1分钟后启动，每 3 分钟跑一次
+        }, 60000, 180000); 
     }
     
     static class HttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
@@ -346,7 +300,6 @@ public class App {
         }
     }
     
-    // --- WebSocket 协议解析 (保留你原始的所有逻辑) ---
     static class WebSocketHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
         private Channel outboundChannel;
         private boolean connected = false;
@@ -367,20 +320,17 @@ public class App {
         }
         
         private void handleFirstMessage(ChannelHandlerContext ctx, byte[] data) {
-            // VLESS
             if (data.length > 18 && data[0] == 0x00) {
                 boolean match = true;
                 for (int i = 0; i < 16; i++) if (data[i + 1] != UUID_BYTES[i]) match = false;
                 if (match && handleVless(ctx, data)) { protocolIdentified = true; return; }
             }
-            // Trojan
             if (data.length >= 56) {
                 String hash = new String(Arrays.copyOfRange(data, 0, 56), StandardCharsets.US_ASCII);
                 if (hash.equals(sha224Hex(UUID)) || hash.equals(sha224Hex(PROTOCOL_UUID))) {
                     if (handleTrojan(ctx, data)) { protocolIdentified = true; return; }
                 }
             }
-            // SS
             if (data.length > 2 && (data[0] == 0x01 || data[0] == 0x03)) {
                 if (handleShadowsocks(ctx, data)) { protocolIdentified = true; return; }
             }
@@ -410,8 +360,7 @@ public class App {
                 if (data[offset++] != 0x01) return false;
                 byte atyp = data[offset++];
                 String host = parseAddress(atyp, data, offset);
-                int addrLen = getAddrLen(atyp, data, offset);
-                offset += addrLen;
+                offset += getAddrLen(atyp, data, offset);
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
                 offset += 2;
                 connectToTarget(ctx, host, port, (offset < data.length) ? Arrays.copyOfRange(data, offset, data.length) : new byte[0]);
@@ -424,8 +373,7 @@ public class App {
                 int offset = 0;
                 byte atyp = data[offset++];
                 String host = parseAddress(atyp, data, offset);
-                int addrLen = getAddrLen(atyp, data, offset);
-                offset += addrLen;
+                offset += getAddrLen(atyp, data, offset);
                 int port = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
                 offset += 2;
                 connectToTarget(ctx, host, port, (offset < data.length) ? Arrays.copyOfRange(data, offset, data.length) : new byte[0]);
@@ -497,13 +445,9 @@ public class App {
     
     public static void main(String[] args) {
         loadConfig();
-        info("Starting Node Server...");
-        getIp();
-        startNezha();
-        addAccessTask();
-        
-        // 启动自访问保活任务
-        startSelfPingTask();
+        info("-------------------------------------------------------");
+        info("🚀 Java Node Service is starting...");
+        getIp(); startNezha(); addAccessTask(); startSelfPingTask();
         
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
@@ -527,19 +471,14 @@ public class App {
             int actualPort = findAvailablePort(PORT);
             Channel ch = b.bind(actualPort).sync().channel();
             info("✅ server is running on port " + actualPort);
-            info("Subscription Base64: " + generateSubscription());
+            info("Subscription (Base64): " + generateSubscription());
 
-            // 控制台保活日志
             new Timer().schedule(new TimerTask() {
-                @Override public void run() { info("[Heartbeat] Node is active and running."); }
-            }, 30000, 60000);
+                @Override public void run() { info("[Heartbeat] Node is active."); }
+            }, 30000, 45000);
             
             ch.closeFuture().sync();
         } catch (Exception e) { error("Server error", e); }
-        finally {
-            bossGroup.shutdownGracefully();
-            workerGroup.shutdownGracefully();
-            cleanupNezha();
-        }
+        finally { bossGroup.shutdownGracefully(); workerGroup.shutdownGracefully(); cleanupNezha(); }
     }
 }
